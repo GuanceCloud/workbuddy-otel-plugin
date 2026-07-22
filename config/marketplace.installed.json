@@ -1,0 +1,17 @@
+{
+  "name": "guance",
+  "owner": {
+    "name": "GuanceCloud"
+  },
+  "description": "Guance observability plugins for AI agents.",
+  "plugins": [
+    {
+      "name": "workbuddy-otel-plugin",
+      "source": "./plugins/workbuddy-otel-plugin",
+      "description": "GTrace-compatible WorkBuddy traces and metrics.",
+      "version": "0.1.0",
+      "category": "observability",
+      "strict": true
+    }
+  ]
+}

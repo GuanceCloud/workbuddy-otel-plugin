@@ -1,0 +1,71 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 5
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": ".*",
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 5
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": ".*",
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 5
+      }]
+    }],
+    "PostToolUseFailure": [{
+      "matcher": ".*",
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 5
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 180
+      }]
+    }],
+    "StopFailure": [{
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 180
+      }]
+    }],
+    "SubagentStart": [{
+      "matcher": ".*",
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 5
+      }]
+    }],
+    "SubagentStop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 180
+      }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{
+        "type": "command",
+        "command": "\"${CODEBUDDY_PLUGIN_ROOT}/bin/run-node\" \"${CODEBUDDY_PLUGIN_ROOT}/src/workbuddy-hook.js\"",
+        "timeout": 180
+      }]
+    }]
+  }
+}

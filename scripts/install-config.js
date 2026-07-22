@@ -1,0 +1,172 @@
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+function readObject(file) {
+  if (!fs.existsSync(file)) return {};
+  const raw = fs.readFileSync(file, "utf-8").replace(/^\uFEFF/, "").trim();
+  if (!raw) return {};
+  const value = JSON.parse(raw);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function writeObject(file, value, mode = 0o600) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf-8", mode });
+  try {
+    fs.renameSync(temporary, file);
+  } catch (error) {
+    if (!fs.existsSync(file) || !["EACCES", "EEXIST", "EPERM"].includes(error?.code)) throw error;
+    fs.rmSync(file, { force: true });
+    fs.renameSync(temporary, file);
+  }
+  try { fs.chmodSync(file, mode); } catch {}
+}
+
+function canonicalHeaderName(key) {
+  const normalized = String(key).trim().toLowerCase().replace(/_/g, "-");
+  if (!normalized) return "";
+  if (normalized === "to-headless") return "To-Headless";
+  if (normalized === "x-token") return "X-Token";
+  if (normalized === "authorization") return "Authorization";
+  return String(key).trim();
+}
+
+function normalizeHeaders(headers) {
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return {};
+  return Object.fromEntries(Object.entries(headers).flatMap(([key, value]) => {
+    const canonical = canonicalHeaderName(key);
+    return canonical && typeof value === "string" && value.trim() ? [[canonical, value.trim()]] : [];
+  }));
+}
+
+function splitAssignment(value) {
+  const [key, ...rest] = String(value).split("=");
+  if (!key?.trim() || rest.length === 0) return undefined;
+  return [key.trim(), rest.join("=").trim()];
+}
+
+function booleanValue(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
+export function updateWorkBuddySettings({ settingsFile, pluginSelector, enabled }) {
+  const settings = readObject(settingsFile);
+  settings.enabledPlugins = settings.enabledPlugins && typeof settings.enabledPlugins === "object" && !Array.isArray(settings.enabledPlugins)
+    ? settings.enabledPlugins
+    : {};
+  if (enabled) settings.enabledPlugins[pluginSelector] = true;
+  else delete settings.enabledPlugins[pluginSelector];
+  writeObject(settingsFile, settings);
+  return settings;
+}
+
+export function writeGtraceConfig(options) {
+  const {
+    configFile,
+    endpoint = "",
+    tracePath = "",
+    metricsPath = "",
+    installType = "gtrace",
+    xToken = "",
+    scriptEnabled,
+    captureContent,
+    debug,
+    tags = [],
+    extraHeaders = [],
+  } = options;
+  const exists = fs.existsSync(configFile);
+  const config = readObject(configFile);
+
+  config.enabled = typeof scriptEnabled === "boolean"
+    ? scriptEnabled
+    : booleanValue(config.enabled) ?? true;
+  if (endpoint) config.endpoint = endpoint.replace(/\/+$/, "");
+  if (tracePath) config.tracePath = tracePath.replace(/^\/+|\/+$/g, "");
+  if (metricsPath) config.metricsPath = metricsPath.replace(/^\/+|\/+$/g, "");
+  if (typeof captureContent === "boolean") config.capture_content = captureContent;
+  else if (!exists && config.capture_content === undefined) config.capture_content = true;
+  if (typeof debug === "boolean") config.debug = debug;
+  else if (!exists && config.debug === undefined) config.debug = false;
+  if (!exists && config.max_chars === undefined) config.max_chars = 20_000;
+  if (!exists && config.timeout_ms === undefined) config.timeout_ms = 25_000;
+
+  config.headers = normalizeHeaders(config.headers);
+  if (installType === "gtrace") config.headers["To-Headless"] ??= "true";
+  if (xToken) config.headers["X-Token"] = xToken;
+  for (const header of extraHeaders) {
+    const assignment = splitAssignment(header);
+    if (!assignment) continue;
+    const key = canonicalHeaderName(assignment[0]);
+    if (key) config.headers[key] = assignment[1];
+  }
+  if (Object.keys(config.headers).length === 0) delete config.headers;
+
+  config.resourceAttributes = config.resourceAttributes && typeof config.resourceAttributes === "object" && !Array.isArray(config.resourceAttributes)
+    ? config.resourceAttributes
+    : {};
+  if (Array.isArray(config.tags)) {
+    for (const tag of config.tags) {
+      const assignment = splitAssignment(tag);
+      if (assignment && !(assignment[0] in config.resourceAttributes)) {
+        config.resourceAttributes[assignment[0]] = assignment[1];
+      }
+    }
+    delete config.tags;
+  }
+  for (const tag of tags) {
+    const assignment = splitAssignment(tag);
+    if (assignment) config.resourceAttributes[assignment[0]] = assignment[1];
+  }
+  if (Object.keys(config.resourceAttributes).length === 0) delete config.resourceAttributes;
+
+  writeObject(configFile, config);
+  return config;
+}
+
+function parseJson(value, fallback) {
+  try {
+    return JSON.parse(value || "");
+  } catch {
+    return fallback;
+  }
+}
+
+function optionsFromEnvironment(action) {
+  if (["enable-plugin", "disable-plugin"].includes(action)) {
+    return {
+      settingsFile: process.env.WORKBUDDY_SETTINGS_FILE_RUNTIME,
+      pluginSelector: process.env.WORKBUDDY_PLUGIN_SELECTOR_RUNTIME,
+      enabled: action === "enable-plugin",
+    };
+  }
+  return {
+    configFile: process.env.GTRACE_CONFIG_FILE_RUNTIME,
+    endpoint: process.env.GTRACE_ENDPOINT_RUNTIME,
+    tracePath: process.env.GTRACE_TRACE_PATH_RUNTIME,
+    metricsPath: process.env.GTRACE_METRICS_PATH_RUNTIME,
+    installType: process.env.GTRACE_INSTALL_TYPE_RUNTIME,
+    xToken: process.env.GTRACE_X_TOKEN_RUNTIME,
+    scriptEnabled: booleanValue(process.env.GTRACE_SCRIPT_ENABLED_RUNTIME),
+    captureContent: booleanValue(process.env.GTRACE_CAPTURE_CONTENT_RUNTIME),
+    debug: booleanValue(process.env.GTRACE_DEBUG_RUNTIME),
+    tags: parseJson(process.env.GTRACE_TAGS_RUNTIME, []),
+    extraHeaders: parseJson(process.env.GTRACE_HEADERS_RUNTIME, []),
+  };
+}
+
+const action = process.argv[2];
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  if (action === "write-gtrace-config") writeGtraceConfig(optionsFromEnvironment(action));
+  else if (["enable-plugin", "disable-plugin"].includes(action)) {
+    updateWorkBuddySettings(optionsFromEnvironment(action));
+  } else {
+    throw new Error(`Unsupported installer config action: ${action || "<empty>"}`);
+  }
+}

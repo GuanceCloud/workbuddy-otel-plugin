@@ -1,0 +1,21 @@
+{
+  "name": "workbuddy-otel-plugin",
+  "version": "0.1.0",
+  "description": "Export WorkBuddy agent traces and metrics using the Guance gtrace conventions.",
+  "author": {
+    "name": "GuanceCloud"
+  },
+  "homepage": "https://github.com/GuanceCloud/workbuddy-otel-plugin",
+  "repository": "https://github.com/GuanceCloud/workbuddy-otel-plugin",
+  "keywords": ["opentelemetry", "observability", "gtrace", "workbuddy"],
+  "userConfig": {
+    "endpoint": {
+      "description": "OTLP or Guance OpenWay endpoint",
+      "sensitive": false
+    },
+    "x_token": {
+      "description": "Guance workspace token (optional for standard OTLP receivers)",
+      "sensitive": true
+    }
+  }
+}

@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+resolve_extra() {
+  paths=${WORKBUDDY_EXTRA_PATHS:-}
+  [ -n "$paths" ] || return 1
+  (
+    IFS=:
+    for dir in $paths; do
+      [ -x "$dir/node" ] && printf '%s\n' "$dir/node" && exit 0
+      [ -x "$dir/node.exe" ] && printf '%s\n' "$dir/node.exe" && exit 0
+    done
+    exit 1
+  )
+}
+
+resolve_managed() {
+  root=${WORKBUDDY_CONFIG_DIR:-${CODEBUDDY_CONFIG_DIR:-$HOME/.workbuddy}}
+  versions="$root/binaries/node/versions"
+  [ -d "$versions" ] || return 1
+  names=""
+  for dir in "$versions"/*/; do
+    [ -d "$dir" ] || continue
+    version=${dir%/}
+    version=${version##*/}
+    case "$version" in *.installing.*|*.__extract_temp__*) continue ;; esac
+    names="$names$version
+"
+  done
+  [ -n "$names" ] || return 1
+  for version in $(printf '%s' "$names" | sort -t. -k1,1nr -k2,2nr -k3,3nr); do
+    [ -x "$versions/$version/bin/node" ] && printf '%s\n' "$versions/$version/bin/node" && return 0
+    [ -x "$versions/$version/node.exe" ] && printf '%s\n' "$versions/$version/node.exe" && return 0
+    [ -x "$versions/$version/bin/node.exe" ] && printf '%s\n' "$versions/$version/bin/node.exe" && return 0
+  done
+  return 1
+}
+
+NODE_BIN=$(resolve_extra || resolve_managed || command -v node 2>/dev/null || true)
+[ -n "$NODE_BIN" ] || { echo "[workbuddy-otel-plugin] cannot locate Node.js" >&2; exit 127; }
+exec "$NODE_BIN" "$@"
