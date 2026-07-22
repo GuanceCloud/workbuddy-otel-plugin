@@ -23,8 +23,10 @@ ENABLE_SEEN=0
 DISABLE_SEEN=0
 CAPTURE_SEEN=0
 NO_CAPTURE_SEEN=0
-TAGS=()
-HEADERS=()
+# The empty sentinel keeps array expansion safe with `set -u` on macOS Bash 3.2.
+# array_json removes it before writing configuration.
+TAGS=("")
+HEADERS=("")
 
 log() {
   printf '[install] %s\n' "$1"
