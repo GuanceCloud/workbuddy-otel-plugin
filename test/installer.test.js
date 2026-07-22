@@ -36,7 +36,9 @@ test("writes a new GTrace preset without exposing installer-only fields", async 
   assert.equal(config.resourceAttributes.label, "value=with-equals");
   assert.equal(config.enabled, true);
   assert.equal(config.capture_content, true);
-  assert.equal((await fs.stat(configFile)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await fs.stat(configFile)).mode & 0o777, 0o600);
+  }
 });
 
 test("preserves existing config during upgrade unless explicitly overridden", async () => {
