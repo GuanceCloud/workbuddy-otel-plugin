@@ -234,35 +234,35 @@ if [[ -z "$METRICS_PATH" && ( -n "$ENDPOINT" || ! -f "$CONFIG_FILE" || "$TYPE_EX
   METRICS_PATH="$([[ "$INSTALL_TYPE" == gtrace ]] && printf 'v1/write/otel-metrics' || printf 'v1/metrics')"
 fi
 
-array_json() {
-  if [[ "$#" -eq 0 ]]; then
-    printf '[]'
-  else
-    printf '%s\n' "$@" | "$NODE_BIN" -e 'const fs=require("fs"); const values=fs.readFileSync(0,"utf8").split(/\n/).filter(Boolean); process.stdout.write(JSON.stringify(values));'
-  fi
-}
-
 if [[ "$WRITE_CONFIG" -eq 0 ]]; then
   log "skipped config because --no-config was set"
 elif [[ -f "$CONFIG_FILE" || -n "$ENDPOINT" || "$CONFIG_REQUESTED" -eq 1 ]]; then
-  TAGS_JSON="$(array_json "${TAGS[@]}")"
-  HEADERS_JSON="$(array_json "${HEADERS[@]}")"
-  RUNTIME_INSTALL_TYPE=""
+  CONFIG_ARGS=(
+    --config-file "$CONFIG_FILE"
+    --endpoint "$ENDPOINT"
+    --trace-path "$TRACE_PATH"
+    --metrics-path "$METRICS_PATH"
+    --x-token "$X_TOKEN"
+  )
   if [[ ! -f "$CONFIG_FILE" || -n "$ENDPOINT" || "$TYPE_EXPLICIT" -eq 1 ]]; then
-    RUNTIME_INSTALL_TYPE="$INSTALL_TYPE"
+    CONFIG_ARGS+=(--install-type "$INSTALL_TYPE")
   fi
-  GTRACE_CONFIG_FILE_RUNTIME="$CONFIG_FILE" \
-  GTRACE_ENDPOINT_RUNTIME="$ENDPOINT" \
-  GTRACE_TRACE_PATH_RUNTIME="$TRACE_PATH" \
-  GTRACE_METRICS_PATH_RUNTIME="$METRICS_PATH" \
-  GTRACE_INSTALL_TYPE_RUNTIME="$RUNTIME_INSTALL_TYPE" \
-  GTRACE_X_TOKEN_RUNTIME="$X_TOKEN" \
-  GTRACE_SCRIPT_ENABLED_RUNTIME="$SCRIPT_ENABLED" \
-  GTRACE_CAPTURE_CONTENT_RUNTIME="$CAPTURE_CONTENT" \
-  GTRACE_DEBUG_RUNTIME="$DEBUG" \
-  GTRACE_TAGS_RUNTIME="$TAGS_JSON" \
-  GTRACE_HEADERS_RUNTIME="$HEADERS_JSON" \
-    "$NODE_BIN" "$CONFIG_HELPER" write-gtrace-config
+  if [[ -n "$SCRIPT_ENABLED" ]]; then
+    CONFIG_ARGS+=(--script-enabled "$SCRIPT_ENABLED")
+  fi
+  if [[ -n "$CAPTURE_CONTENT" ]]; then
+    CONFIG_ARGS+=(--capture-content "$CAPTURE_CONTENT")
+  fi
+  if [[ -n "$DEBUG" ]]; then
+    CONFIG_ARGS+=(--debug "$DEBUG")
+  fi
+  for tag in "${TAGS[@]}"; do
+    [[ -z "$tag" ]] || CONFIG_ARGS+=(--tag "$tag")
+  done
+  for header in "${HEADERS[@]}"; do
+    [[ -z "$header" ]] || CONFIG_ARGS+=(--header "$header")
+  done
+  "$NODE_BIN" "$CONFIG_HELPER" write-gtrace-config "${CONFIG_ARGS[@]}"
   log "updated $CONFIG_FILE"
   [[ -z "$ENDPOINT" ]] || log "configured endpoint: ${ENDPOINT%/}"
   [[ -z "$TRACE_PATH" ]] || log "configured trace path: $TRACE_PATH"

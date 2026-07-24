@@ -138,6 +138,57 @@ function parseJson(value, fallback) {
   }
 }
 
+function parseCliOptions(argv) {
+  const options = { tags: [], extraHeaders: [] };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    const readValue = (name) => {
+      const value = argv[index + 1];
+      if (value === undefined) throw new Error(`${name} requires a value`);
+      index += 1;
+      return value;
+    };
+    switch (argument) {
+      case "--config-file":
+        options.configFile = readValue("--config-file");
+        break;
+      case "--endpoint":
+        options.endpoint = readValue("--endpoint");
+        break;
+      case "--trace-path":
+        options.tracePath = readValue("--trace-path");
+        break;
+      case "--metrics-path":
+        options.metricsPath = readValue("--metrics-path");
+        break;
+      case "--install-type":
+        options.installType = readValue("--install-type");
+        break;
+      case "--x-token":
+        options.xToken = readValue("--x-token");
+        break;
+      case "--script-enabled":
+        options.scriptEnabled = booleanValue(readValue("--script-enabled"));
+        break;
+      case "--capture-content":
+        options.captureContent = booleanValue(readValue("--capture-content"));
+        break;
+      case "--debug":
+        options.debug = booleanValue(readValue("--debug"));
+        break;
+      case "--tag":
+        options.tags.push(readValue("--tag"));
+        break;
+      case "--header":
+        options.extraHeaders.push(readValue("--header"));
+        break;
+      default:
+        throw new Error(`Unsupported installer config option: ${argument}`);
+    }
+  }
+  return options;
+}
+
 function optionsFromEnvironment(action) {
   if (["enable-plugin", "disable-plugin"].includes(action)) {
     return {
@@ -163,7 +214,10 @@ function optionsFromEnvironment(action) {
 
 const action = process.argv[2];
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  if (action === "write-gtrace-config") writeGtraceConfig(optionsFromEnvironment(action));
+  if (action === "write-gtrace-config") {
+    const cliOptions = process.argv.length > 3 ? parseCliOptions(process.argv.slice(3)) : undefined;
+    writeGtraceConfig(cliOptions ?? optionsFromEnvironment(action));
+  }
   else if (["enable-plugin", "disable-plugin"].includes(action)) {
     updateWorkBuddySettings(optionsFromEnvironment(action));
   } else {

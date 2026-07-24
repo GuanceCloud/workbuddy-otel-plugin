@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Align the macOS shell installer tag update path with `codex-otel-plugin` by passing `--tag` and `--header` values directly to the config helper.
+- Add direct CLI parsing support to the installer helper while keeping the existing environment-variable path for PowerShell installs.
+- Add regression coverage for overwriting existing `agent_id` and `agent_name` resource attributes during reinstall.
+
 ## 0.1.1
 
 - Reapply the explicit `gtrace` or `otlp` preset routes during reinstall when `gtrace.json` already exists, matching the fixed installer behavior on macOS and Windows.

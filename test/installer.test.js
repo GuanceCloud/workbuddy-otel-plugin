@@ -66,6 +66,40 @@ test("preserves existing config during upgrade unless explicitly overridden", as
   assert.equal(enabled.capture_content, true);
 });
 
+test("installer helper CLI overwrites managed auth and agent tags with the latest values", async () => {
+  const configFile = path.join(tempDir, "cli-overwrite.json");
+  await fs.writeFile(configFile, JSON.stringify({
+    enabled: true,
+    endpoint: "https://llm-openway.guance.com",
+    tracePath: "v1/write/otel-llm",
+    metricsPath: "v1/write/otel-metrics",
+    headers: { "X-Token": "old-token", "To-Headless": "true" },
+    resourceAttributes: { agent_id: "oldid", agent_name: "oldname" },
+  }));
+
+  const result = spawnSync(process.execPath, [
+    path.resolve("scripts/install-config.js"),
+    "write-gtrace-config",
+    "--config-file", configFile,
+    "--endpoint", "https://llm-openway.guance.com",
+    "--trace-path", "v1/write/otel-llm",
+    "--metrics-path", "v1/write/otel-metrics",
+    "--install-type", "gtrace",
+    "--x-token", "new-token",
+    "--tag", "agent_id=newid",
+    "--tag", "agent_name=newname",
+  ], {
+    cwd: path.resolve("."),
+    encoding: "utf-8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const config = JSON.parse(await fs.readFile(configFile, "utf-8"));
+  assert.equal(config.headers["X-Token"], "new-token");
+  assert.equal(config.resourceAttributes.agent_id, "newid");
+  assert.equal(config.resourceAttributes.agent_name, "newname");
+});
+
 test("does not apply the default GTrace preset to an existing OTLP config", async () => {
   const configFile = path.join(tempDir, "otlp-upgrade.json");
   await fs.writeFile(configFile, JSON.stringify({
@@ -103,6 +137,39 @@ test("shell installer reapplies the explicit gtrace preset to an existing config
   assert.equal(config.metricsPath, "v1/write/otel-metrics");
   assert.equal(config.headers["To-Headless"], "true");
   assert.equal(config.headers.Authorization, "Bearer keep-me");
+});
+
+test("shell installer overwrites existing agent tags with the latest tag arguments", async () => {
+  const profileDir = path.join(tempDir, "shell-tags-profile");
+  const configFile = path.join(profileDir, "gtrace.json");
+  await fs.mkdir(profileDir, { recursive: true });
+  await fs.writeFile(configFile, JSON.stringify({
+    endpoint: "https://llm-openway.guance.com",
+    tracePath: "v1/write/otel-llm",
+    metricsPath: "v1/write/otel-metrics",
+    headers: { "X-Token": "old-token", "To-Headless": "true" },
+    resourceAttributes: { agent_id: "oldid", agent_name: "oldname" },
+  }));
+
+  const result = spawnSync("bash", [
+    "scripts/install.sh",
+    "--config-dir", profileDir,
+    "--type", "gtrace",
+    "--endpoint", "https://llm-openway.guance.com",
+    "--x-token", "new-token",
+    "--tag", "agent_id=newid",
+    "--tag", "agent_name=newname",
+  ], {
+    cwd: path.resolve("."),
+    env: { ...process.env, WORKBUDDY_OTEL_NODE: process.execPath },
+    encoding: "utf-8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const config = JSON.parse(await fs.readFile(configFile, "utf-8"));
+  assert.equal(config.headers["X-Token"], "new-token");
+  assert.equal(config.resourceAttributes.agent_id, "newid");
+  assert.equal(config.resourceAttributes.agent_name, "newname");
 });
 
 test("updates only the WorkBuddy plugin selector in settings", async () => {
