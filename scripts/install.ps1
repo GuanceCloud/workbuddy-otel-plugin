@@ -163,10 +163,10 @@ $verb = if ($Refresh) { "refreshed" } else { "installed" }
 Write-InstallLog "$verb plugin: $TargetDir"
 
 $ConfigAlreadyExists = Test-Path -LiteralPath $ConfigFile -PathType Leaf
-if (-not $TracePath -and ($Endpoint -or -not $ConfigAlreadyExists)) {
+if (-not $TracePath -and ($Endpoint -or -not $ConfigAlreadyExists -or $TypeExplicit)) {
   $TracePath = if ($Type -eq "gtrace") { "v1/write/otel-llm" } else { "v1/traces" }
 }
-if (-not $MetricsPath -and ($Endpoint -or -not $ConfigAlreadyExists)) {
+if (-not $MetricsPath -and ($Endpoint -or -not $ConfigAlreadyExists -or $TypeExplicit)) {
   $MetricsPath = if ($Type -eq "gtrace") { "v1/write/otel-metrics" } else { "v1/metrics" }
 }
 

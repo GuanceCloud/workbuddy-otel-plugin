@@ -10,7 +10,11 @@ Linux/macOS:
 
 ```bash
 curl -fsSL https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/download/install-release.sh \
-  | bash -s -- latest --endpoint https://llm-openway.guance.com --x-token '<client-token>'
+  | bash -s -- latest \
+      --endpoint https://llm-openway.guance.com \
+      --x-token '<client-token>' \
+      --tag 'agent_id=workbuddy-prod' \
+      --tag 'agent_name=WorkBuddy'
 ```
 
 Windows PowerShell:
@@ -18,7 +22,8 @@ Windows PowerShell:
 ```powershell
 $installer = Join-Path $env:TEMP "workbuddy-otel-install.ps1"
 Invoke-WebRequest https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/download/install-release.ps1 -OutFile $installer
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Version latest -Endpoint https://llm-openway.guance.com -XToken '<client-token>'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `
+  "& '$installer' -Version latest -Endpoint https://llm-openway.guance.com -XToken '<client-token>' -Tag @('agent_id=workbuddy-prod','agent_name=WorkBuddy')"
 ```
 
 Restart WorkBuddy or run `/reload-plugins` after installation. The installers create a local `guance` marketplace, enable `workbuddy-otel-plugin@guance`, preserve unrelated WorkBuddy settings, and merge `gtrace.json`. Normal upgrades preserve endpoint, token, paths, runtime enablement, and privacy settings when those options are omitted.

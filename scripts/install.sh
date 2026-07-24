@@ -227,10 +227,10 @@ fi
 update_plugin_setting enable-plugin
 log "$([[ "$REFRESH" == true ]] && printf 'refreshed' || printf 'installed') plugin: $TARGET_DIR"
 
-if [[ -z "$TRACE_PATH" && ( -n "$ENDPOINT" || ! -f "$CONFIG_FILE" ) ]]; then
+if [[ -z "$TRACE_PATH" && ( -n "$ENDPOINT" || ! -f "$CONFIG_FILE" || "$TYPE_EXPLICIT" -eq 1 ) ]]; then
   TRACE_PATH="$([[ "$INSTALL_TYPE" == gtrace ]] && printf 'v1/write/otel-llm' || printf 'v1/traces')"
 fi
-if [[ -z "$METRICS_PATH" && ( -n "$ENDPOINT" || ! -f "$CONFIG_FILE" ) ]]; then
+if [[ -z "$METRICS_PATH" && ( -n "$ENDPOINT" || ! -f "$CONFIG_FILE" || "$TYPE_EXPLICIT" -eq 1 ) ]]; then
   METRICS_PATH="$([[ "$INSTALL_TYPE" == gtrace ]] && printf 'v1/write/otel-metrics' || printf 'v1/metrics')"
 fi
 

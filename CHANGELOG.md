@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Reapply the explicit `gtrace` or `otlp` preset routes during reinstall when `gtrace.json` already exists, matching the fixed installer behavior on macOS and Windows.
+- Add a shell-installer regression test that verifies preset route overrides on an existing configuration.
+- Update README install commands to include repeatable `--tag` / `-Tag` examples for `agent_id` and `agent_name`.
+
 ## 0.1.0
 
 - Add native WorkBuddy 5.2.6 hooks for terminal main-agent and subagent turns.

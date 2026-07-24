@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { spawnSync } from "node:child_process";
 import { after, before, test } from "node:test";
 
 import { updateWorkBuddySettings, writeGtraceConfig } from "../scripts/install-config.js";
@@ -77,6 +78,31 @@ test("does not apply the default GTrace preset to an existing OTLP config", asyn
   assert.deepEqual(Object.keys(config.headers), ["Authorization"]);
   assert.equal(config.tracePath, "v1/traces");
   assert.equal(config.metricsPath, "v1/metrics");
+});
+
+test("shell installer reapplies the explicit gtrace preset to an existing config", async () => {
+  const profileDir = path.join(tempDir, "shell-profile");
+  const configFile = path.join(profileDir, "gtrace.json");
+  await fs.mkdir(profileDir, { recursive: true });
+  await fs.writeFile(configFile, JSON.stringify({
+    endpoint: "https://llm-openway.guance.com",
+    tracePath: "v1/traces",
+    metricsPath: "v1/metrics",
+    headers: { Authorization: "Bearer keep-me" },
+  }));
+
+  const result = spawnSync("bash", ["scripts/install.sh", "--config-dir", profileDir, "--type", "gtrace"], {
+    cwd: path.resolve("."),
+    env: { ...process.env, WORKBUDDY_OTEL_NODE: process.execPath },
+    encoding: "utf-8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const config = JSON.parse(await fs.readFile(configFile, "utf-8"));
+  assert.equal(config.tracePath, "v1/write/otel-llm");
+  assert.equal(config.metricsPath, "v1/write/otel-metrics");
+  assert.equal(config.headers["To-Headless"], "true");
+  assert.equal(config.headers.Authorization, "Bearer keep-me");
 });
 
 test("updates only the WorkBuddy plugin selector in settings", async () => {
