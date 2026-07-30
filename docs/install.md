@@ -86,7 +86,7 @@ curl -fsSL https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/
   | bash -s -- latest
 ```
 
-Install a specific version by replacing `latest` with `v0.1.2` or `0.1.2`. PowerShell uses `-Version v0.1.2`.
+Install a specific version by replacing `latest` with `v0.1.3` or `0.1.3`. PowerShell uses `-Version v0.1.3`.
 
 ## Runtime switches
 

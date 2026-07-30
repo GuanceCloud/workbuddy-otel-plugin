@@ -151,6 +151,7 @@ fi
 CONFIG_FILE="${CONFIG_FILE:-$CONFIG_DIR/gtrace.json}"
 MARKETPLACE_DIR="$CONFIG_DIR/plugins/marketplaces/guance"
 TARGET_DIR="$MARKETPLACE_DIR/plugins/workbuddy-otel-plugin"
+CACHE_PLUGIN_DIR="$CONFIG_DIR/plugins/cache/guance/workbuddy-otel-plugin"
 SETTINGS_FILE="$CONFIG_DIR/settings.json"
 DATA_DIR="$CONFIG_DIR/plugins/data/workbuddy-otel-plugin"
 PLUGIN_SELECTOR="workbuddy-otel-plugin@guance"
@@ -198,8 +199,35 @@ update_plugin_setting() {
     "$NODE_BIN" "$CONFIG_HELPER" "$action"
 }
 
+plugin_version() {
+  "$NODE_BIN" -p "require(process.argv[1]).version" "$REPO_ROOT/package.json"
+}
+
+resolve_plugin_cli() {
+  if command -v workbuddy >/dev/null 2>&1; then
+    command -v workbuddy
+    return
+  fi
+  if command -v codebuddy >/dev/null 2>&1; then
+    command -v codebuddy
+    return
+  fi
+  return 1
+}
+
+activate_plugin_with_cli() {
+  local cli="$1"
+  "$cli" plugin marketplace add "$MARKETPLACE_DIR" >/dev/null 2>&1 || true
+  "$cli" plugin marketplace update guance >/dev/null 2>&1 || true
+  if "$cli" plugin install "$PLUGIN_SELECTOR" --scope user >/dev/null 2>&1; then
+    return 0
+  fi
+  "$cli" plugin enable "$PLUGIN_SELECTOR" >/dev/null 2>&1
+}
+
 if [[ "$UNINSTALL" == true ]]; then
   rm -rf "$TARGET_DIR"
+  rm -rf "$CACHE_PLUGIN_DIR"
   update_plugin_setting disable-plugin
   if [[ "$PURGE" == true ]]; then
     rm -rf "$DATA_DIR"
@@ -221,11 +249,33 @@ cp "$REPO_ROOT/package.json" "$TARGET_DIR/package.json"
 cp "$REPO_ROOT/config/marketplace.installed.json" "$MARKETPLACE_DIR/.codebuddy-plugin/marketplace.json"
 chmod +x "$TARGET_DIR/bin/run-node"
 
+PLUGIN_VERSION="$(plugin_version)"
+CACHE_DIR="$CACHE_PLUGIN_DIR/$PLUGIN_VERSION"
+rm -rf "$CACHE_DIR"
+mkdir -p "$CACHE_DIR"
+for item in .codebuddy-plugin bin hooks src; do
+  cp -R "$REPO_ROOT/$item" "$CACHE_DIR/"
+done
+cp "$REPO_ROOT/package.json" "$CACHE_DIR/package.json"
+chmod +x "$CACHE_DIR/bin/run-node"
+
 if [[ -f "$SETTINGS_FILE" ]]; then
   cp "$SETTINGS_FILE" "$SETTINGS_FILE.workbuddy-otel-plugin.bak"
 fi
-update_plugin_setting enable-plugin
+PLUGIN_CLI=""
+if PLUGIN_CLI="$(resolve_plugin_cli)"; then
+  if activate_plugin_with_cli "$PLUGIN_CLI"; then
+    log "activated plugin with CLI: $PLUGIN_CLI"
+  else
+    update_plugin_setting enable-plugin
+    log "CLI activation failed; updated $SETTINGS_FILE directly"
+  fi
+else
+  update_plugin_setting enable-plugin
+  log "plugin CLI not found; updated $SETTINGS_FILE directly"
+fi
 log "$([[ "$REFRESH" == true ]] && printf 'refreshed' || printf 'installed') plugin: $TARGET_DIR"
+log "updated plugin cache: $CACHE_DIR"
 
 if [[ -z "$TRACE_PATH" && ( -n "$ENDPOINT" || ! -f "$CONFIG_FILE" || "$TYPE_EXPLICIT" -eq 1 ) ]]; then
   TRACE_PATH="$([[ "$INSTALL_TYPE" == gtrace ]] && printf 'v1/write/otel-llm' || printf 'v1/traces')"

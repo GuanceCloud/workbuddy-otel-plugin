@@ -9,7 +9,7 @@
       "name": "workbuddy-otel-plugin",
       "source": "..",
       "description": "GTrace-compatible WorkBuddy traces and metrics.",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "category": "observability",
       "strict": true
     }

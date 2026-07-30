@@ -137,6 +137,7 @@ test("shell installer reapplies the explicit gtrace preset to an existing config
   assert.equal(config.metricsPath, "v1/write/otel-metrics");
   assert.equal(config.headers["To-Headless"], "true");
   assert.equal(config.headers.Authorization, "Bearer keep-me");
+  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.3", "hooks", "hooks.json"));
 });
 
 test("shell installer overwrites existing agent tags with the latest tag arguments", async () => {
@@ -185,4 +186,38 @@ test("updates only the WorkBuddy plugin selector in settings", async () => {
   settings = JSON.parse(await fs.readFile(settingsFile, "utf-8"));
   assert.equal(settings.enabledPlugins["workbuddy-otel-plugin@guance"], undefined);
   assert.equal(settings.enabledPlugins["other@test"], true);
+});
+
+test("shell installer prefers the official plugin CLI when available", async () => {
+  const profileDir = path.join(tempDir, "shell-cli-profile");
+  const cliDir = path.join(tempDir, "fake-cli");
+  const cliLog = path.join(tempDir, "workbuddy-cli.log");
+  await fs.mkdir(profileDir, { recursive: true });
+  await fs.mkdir(cliDir, { recursive: true });
+  await fs.writeFile(path.join(cliDir, "workbuddy"), [
+    "#!/usr/bin/env bash",
+    `printf '%s\\n' \"$*\" >> ${JSON.stringify(cliLog)}`,
+    "exit 0",
+  ].join("\n"), { mode: 0o755 });
+
+  const result = spawnSync("bash", [
+    "scripts/install.sh",
+    "--config-dir", profileDir,
+    "--type", "gtrace",
+    "--endpoint", "https://llm-openway.guance.com",
+    "--x-token", "new-token",
+  ], {
+    cwd: path.resolve("."),
+    env: {
+      ...process.env,
+      WORKBUDDY_OTEL_NODE: process.execPath,
+      PATH: `${cliDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    },
+    encoding: "utf-8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const cliOutput = await fs.readFile(cliLog, "utf-8");
+  assert.match(cliOutput, /plugin marketplace add/);
+  assert.match(cliOutput, /plugin install workbuddy-otel-plugin@guance --scope user/);
 });

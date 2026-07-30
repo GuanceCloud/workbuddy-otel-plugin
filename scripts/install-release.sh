@@ -12,7 +12,7 @@ Usage:
 
 Examples:
   curl -fsSL <installer-url> | bash -s -- latest --endpoint https://llm-openway.guance.com --x-token <token>
-  curl -fsSL <installer-url> | bash -s -- v0.1.2 --no-config
+  curl -fsSL <installer-url> | bash -s -- v0.1.3 --no-config
 
 Options are passed to scripts/install.sh. Common options:
   --type gtrace|otlp

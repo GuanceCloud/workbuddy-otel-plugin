@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Copy the installed plugin into WorkBuddy's versioned cache directory so Hook runtime files exist under `~/.workbuddy/plugins/cache/guance/workbuddy-otel-plugin/<version>`.
+- Prefer the official `workbuddy` or `codebuddy` CLI activation flow during install, including marketplace refresh and plugin install/enable, and keep direct `settings.json` mutation as a fallback.
+- Add installer regression coverage for cache population and CLI-based activation so macOS user installs match the working `codex-otel-plugin` behavior.
+
 ## 0.1.2
 
 - Align the macOS shell installer tag update path with `codex-otel-plugin` by passing `--tag` and `--header` values directly to the config helper.

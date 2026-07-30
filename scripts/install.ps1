@@ -107,6 +107,7 @@ foreach ($assignment in @($Tag) + @($Header)) {
 
 $MarketplaceDir = Join-Path $ConfigDir "plugins\marketplaces\guance"
 $TargetDir = Join-Path $MarketplaceDir "plugins\workbuddy-otel-plugin"
+$CachePluginDir = Join-Path $ConfigDir "plugins\cache\guance\workbuddy-otel-plugin"
 $SettingsFile = Join-Path $ConfigDir "settings.json"
 $DataDir = Join-Path $ConfigDir "plugins\data\workbuddy-otel-plugin"
 $PluginSelector = "workbuddy-otel-plugin@guance"
@@ -131,8 +132,32 @@ function Update-PluginSetting([bool]$Enabled) {
   if ($LASTEXITCODE -ne 0) { throw "Failed to update $SettingsFile" }
 }
 
+function Get-PluginVersion() {
+  $version = (& $NodeBin -p "require(process.argv[1]).version" (Join-Path $RepoRoot "package.json") | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0 -or -not $version) { throw "Failed to read plugin version from package.json" }
+  return $version
+}
+
+function Resolve-PluginCli() {
+  foreach ($name in @("workbuddy", "codebuddy")) {
+    $command = Get-Command $name -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+  }
+  return $null
+}
+
+function Activate-PluginWithCli([string]$Cli) {
+  & $Cli plugin marketplace add $MarketplaceDir | Out-Null
+  & $Cli plugin marketplace update guance | Out-Null
+  & $Cli plugin install $PluginSelector --scope user | Out-Null
+  if ($LASTEXITCODE -eq 0) { return $true }
+  & $Cli plugin enable $PluginSelector | Out-Null
+  return ($LASTEXITCODE -eq 0)
+}
+
 if ($Uninstall) {
   Remove-PathIfPresent $TargetDir
+  Remove-PathIfPresent $CachePluginDir
   Update-PluginSetting $false
   if ($Purge) {
     Remove-PathIfPresent $DataDir
@@ -155,12 +180,33 @@ foreach ($name in @(".codebuddy-plugin", "bin", "hooks", "src")) {
 Copy-Item -LiteralPath (Join-Path $RepoRoot "package.json") -Destination (Join-Path $TargetDir "package.json") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "config\marketplace.installed.json") -Destination (Join-Path $MarketplaceDir ".codebuddy-plugin\marketplace.json") -Force
 
+$PluginVersion = Get-PluginVersion
+$CacheDir = Join-Path $CachePluginDir $PluginVersion
+Remove-PathIfPresent $CacheDir
+[IO.Directory]::CreateDirectory($CacheDir) | Out-Null
+foreach ($name in @(".codebuddy-plugin", "bin", "hooks", "src")) {
+  Copy-Item -LiteralPath (Join-Path $RepoRoot $name) -Destination (Join-Path $CacheDir $name) -Recurse -Force
+}
+Copy-Item -LiteralPath (Join-Path $RepoRoot "package.json") -Destination (Join-Path $CacheDir "package.json") -Force
+
 if (Test-Path -LiteralPath $SettingsFile -PathType Leaf) {
   Copy-Item -LiteralPath $SettingsFile -Destination "$SettingsFile.workbuddy-otel-plugin.bak" -Force
 }
-Update-PluginSetting $true
+$PluginCli = Resolve-PluginCli
+if ($PluginCli) {
+  if (Activate-PluginWithCli $PluginCli) {
+    Write-InstallLog "activated plugin with CLI: $PluginCli"
+  } else {
+    Update-PluginSetting $true
+    Write-InstallLog "CLI activation failed; updated $SettingsFile directly"
+  }
+} else {
+  Update-PluginSetting $true
+  Write-InstallLog "plugin CLI not found; updated $SettingsFile directly"
+}
 $verb = if ($Refresh) { "refreshed" } else { "installed" }
 Write-InstallLog "$verb plugin: $TargetDir"
+Write-InstallLog "updated plugin cache: $CacheDir"
 
 $ConfigAlreadyExists = Test-Path -LiteralPath $ConfigFile -PathType Leaf
 if (-not $TracePath -and ($Endpoint -or -not $ConfigAlreadyExists -or $TypeExplicit)) {
