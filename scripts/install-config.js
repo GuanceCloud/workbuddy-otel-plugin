@@ -67,6 +67,124 @@ export function updateWorkBuddySettings({ settingsFile, pluginSelector, enabled 
   return settings;
 }
 
+function managedHookCommand(command) {
+  if (typeof command !== "string") return false;
+  return command.includes("workbuddy-otel-plugin") && command.includes("workbuddy-hook.js");
+}
+
+function hookEntry(command, timeout, matcher) {
+  return {
+    ...(matcher ? { matcher } : {}),
+    hooks: [{
+      type: "command",
+      command,
+      timeout,
+    }],
+  };
+}
+
+function fallbackHooks(pluginRoot) {
+  const normalizedRoot = path.resolve(pluginRoot);
+  const command = `${JSON.stringify(path.join(normalizedRoot, "bin", "run-node"))} ${JSON.stringify(path.join(normalizedRoot, "src", "workbuddy-hook.js"))}`;
+  return {
+    UserPromptSubmit: [hookEntry(command, 5)],
+    PreToolUse: [hookEntry(command, 5, ".*")],
+    PostToolUse: [hookEntry(command, 5, ".*")],
+    PostToolUseFailure: [hookEntry(command, 5, ".*")],
+    Stop: [hookEntry(command, 180)],
+    StopFailure: [hookEntry(command, 180)],
+    SubagentStart: [hookEntry(command, 5, ".*")],
+    SubagentStop: [hookEntry(command, 180)],
+    SessionEnd: [hookEntry(command, 180)],
+  };
+}
+
+function stripManagedHooks(settings) {
+  if (!settings.hooks || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) return settings;
+  const next = {};
+  for (const [eventName, groups] of Object.entries(settings.hooks)) {
+    if (!Array.isArray(groups)) {
+      next[eventName] = groups;
+      continue;
+    }
+    const filteredGroups = groups.flatMap((group) => {
+      if (!group || typeof group !== "object" || Array.isArray(group)) return [group];
+      const hooks = Array.isArray(group.hooks) ? group.hooks.filter((hook) => !managedHookCommand(hook?.command)) : group.hooks;
+      if (Array.isArray(hooks) && hooks.length === 0) return [];
+      return [{ ...group, hooks }];
+    });
+    if (filteredGroups.length > 0) next[eventName] = filteredGroups;
+  }
+  if (Object.keys(next).length > 0) settings.hooks = next;
+  else delete settings.hooks;
+  return settings;
+}
+
+export function updateInstalledPluginsRegistry({ registryFile, pluginSelector, installPath, version, enabled }) {
+  const registry = readObject(registryFile);
+  registry.plugins = registry.plugins && typeof registry.plugins === "object" && !Array.isArray(registry.plugins)
+    ? registry.plugins
+    : {};
+  if (enabled) {
+    const existing = registry.plugins[pluginSelector] && typeof registry.plugins[pluginSelector] === "object"
+      ? registry.plugins[pluginSelector]
+      : {};
+    const now = new Date().toISOString();
+    registry.plugins[pluginSelector] = {
+      scope: existing.scope || "user",
+      installPath,
+      version,
+      installedAt: existing.installedAt || now,
+      lastUpdated: now,
+    };
+  } else {
+    delete registry.plugins[pluginSelector];
+  }
+  writeObject(registryFile, registry);
+  return registry;
+}
+
+export function updateWorkBuddyFallbackInstall({
+  settingsFile,
+  registryFile,
+  pluginSelector,
+  pluginRoot,
+  version,
+  enabled,
+}) {
+  const settings = readObject(settingsFile);
+  settings.enabledPlugins = settings.enabledPlugins && typeof settings.enabledPlugins === "object" && !Array.isArray(settings.enabledPlugins)
+    ? settings.enabledPlugins
+    : {};
+  if (enabled) settings.enabledPlugins[pluginSelector] = true;
+  else delete settings.enabledPlugins[pluginSelector];
+  stripManagedHooks(settings);
+  if (enabled) {
+    const managed = fallbackHooks(pluginRoot);
+    settings.hooks = settings.hooks && typeof settings.hooks === "object" && !Array.isArray(settings.hooks) ? settings.hooks : {};
+    for (const [eventName, groups] of Object.entries(managed)) {
+      settings.hooks[eventName] = [...(settings.hooks[eventName] ?? []), ...groups];
+    }
+  }
+  writeObject(settingsFile, settings);
+  if (registryFile) {
+    updateInstalledPluginsRegistry({
+      registryFile,
+      pluginSelector,
+      installPath: pluginRoot,
+      version,
+      enabled,
+    });
+  }
+  return settings;
+}
+
+export function removeWorkBuddyFallbackHooks({ settingsFile }) {
+  const settings = stripManagedHooks(readObject(settingsFile));
+  writeObject(settingsFile, settings);
+  return settings;
+}
+
 export function writeGtraceConfig(options) {
   const {
     configFile,
@@ -197,6 +315,21 @@ function optionsFromEnvironment(action) {
       enabled: action === "enable-plugin",
     };
   }
+  if (["enable-plugin-fallback", "disable-plugin-fallback"].includes(action)) {
+    return {
+      settingsFile: process.env.WORKBUDDY_SETTINGS_FILE_RUNTIME,
+      registryFile: process.env.WORKBUDDY_INSTALLED_PLUGINS_FILE_RUNTIME,
+      pluginSelector: process.env.WORKBUDDY_PLUGIN_SELECTOR_RUNTIME,
+      pluginRoot: process.env.WORKBUDDY_PLUGIN_ROOT_RUNTIME,
+      version: process.env.WORKBUDDY_PLUGIN_VERSION_RUNTIME,
+      enabled: action === "enable-plugin-fallback",
+    };
+  }
+  if (action === "remove-plugin-fallback-hooks") {
+    return {
+      settingsFile: process.env.WORKBUDDY_SETTINGS_FILE_RUNTIME,
+    };
+  }
   return {
     configFile: process.env.GTRACE_CONFIG_FILE_RUNTIME,
     endpoint: process.env.GTRACE_ENDPOINT_RUNTIME,
@@ -220,6 +353,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   }
   else if (["enable-plugin", "disable-plugin"].includes(action)) {
     updateWorkBuddySettings(optionsFromEnvironment(action));
+  } else if (["enable-plugin-fallback", "disable-plugin-fallback"].includes(action)) {
+    updateWorkBuddyFallbackInstall(optionsFromEnvironment(action));
+  } else if (action === "remove-plugin-fallback-hooks") {
+    removeWorkBuddyFallbackHooks(optionsFromEnvironment(action));
   } else {
     throw new Error(`Unsupported installer config action: ${action || "<empty>"}`);
   }

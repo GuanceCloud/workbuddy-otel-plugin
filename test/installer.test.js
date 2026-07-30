@@ -5,7 +5,12 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { after, before, test } from "node:test";
 
-import { updateWorkBuddySettings, writeGtraceConfig } from "../scripts/install-config.js";
+import {
+  updateInstalledPluginsRegistry,
+  updateWorkBuddyFallbackInstall,
+  updateWorkBuddySettings,
+  writeGtraceConfig,
+} from "../scripts/install-config.js";
 
 let tempDir;
 
@@ -137,7 +142,7 @@ test("shell installer reapplies the explicit gtrace preset to an existing config
   assert.equal(config.metricsPath, "v1/write/otel-metrics");
   assert.equal(config.headers["To-Headless"], "true");
   assert.equal(config.headers.Authorization, "Bearer keep-me");
-  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.3", "hooks", "hooks.json"));
+  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.4", "hooks", "hooks.json"));
 });
 
 test("shell installer overwrites existing agent tags with the latest tag arguments", async () => {
@@ -188,6 +193,84 @@ test("updates only the WorkBuddy plugin selector in settings", async () => {
   assert.equal(settings.enabledPlugins["other@test"], true);
 });
 
+test("fallback installation writes managed hooks and plugin registry entries", async () => {
+  const settingsFile = path.join(tempDir, "fallback-settings.json");
+  const registryFile = path.join(tempDir, "plugins", "installed_plugins.json");
+  const pluginRoot = path.join(tempDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.4");
+  await fs.mkdir(pluginRoot, { recursive: true });
+  await fs.writeFile(settingsFile, JSON.stringify({
+    theme: "dark",
+    hooks: {
+      Stop: [{
+        hooks: [{ type: "command", command: "\"/usr/bin/true\"", timeout: 1 }],
+      }],
+    },
+  }));
+
+  updateWorkBuddyFallbackInstall({
+    settingsFile,
+    registryFile,
+    pluginSelector: "workbuddy-otel-plugin@guance",
+    pluginRoot,
+    version: "0.1.4",
+    enabled: true,
+  });
+
+  const settings = JSON.parse(await fs.readFile(settingsFile, "utf-8"));
+  assert.equal(settings.enabledPlugins["workbuddy-otel-plugin@guance"], true);
+  assert.equal(settings.theme, "dark");
+  assert.match(settings.hooks.Stop.at(-1).hooks[0].command, /workbuddy-otel-plugin/);
+  assert.match(settings.hooks.Stop.at(-1).hooks[0].command, /workbuddy-hook\.js/);
+  assert.equal(settings.hooks.Stop[0].hooks[0].command, "\"/usr/bin/true\"");
+
+  const registry = JSON.parse(await fs.readFile(registryFile, "utf-8"));
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].installPath, pluginRoot);
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.4");
+
+  updateWorkBuddyFallbackInstall({
+    settingsFile,
+    registryFile,
+    pluginSelector: "workbuddy-otel-plugin@guance",
+    pluginRoot,
+    version: "0.1.4",
+    enabled: false,
+  });
+
+  const removedSettings = JSON.parse(await fs.readFile(settingsFile, "utf-8"));
+  assert.equal(removedSettings.enabledPlugins["workbuddy-otel-plugin@guance"], undefined);
+  assert.equal(removedSettings.hooks.Stop.length, 1);
+  assert.equal(removedSettings.hooks.Stop[0].hooks[0].command, "\"/usr/bin/true\"");
+
+  const removedRegistry = JSON.parse(await fs.readFile(registryFile, "utf-8"));
+  assert.equal(removedRegistry.plugins["workbuddy-otel-plugin@guance"], undefined);
+});
+
+test("updates installed plugin registry without disturbing unrelated entries", async () => {
+  const registryFile = path.join(tempDir, "standalone-installed_plugins.json");
+  await fs.mkdir(path.dirname(registryFile), { recursive: true });
+  await fs.writeFile(registryFile, JSON.stringify({
+    plugins: {
+      "other@test": {
+        scope: "user",
+        installPath: "/tmp/other",
+        version: "1.0.0",
+      },
+    },
+  }));
+
+  updateInstalledPluginsRegistry({
+    registryFile,
+    pluginSelector: "workbuddy-otel-plugin@guance",
+    installPath: "/tmp/workbuddy-otel-plugin",
+    version: "0.1.4",
+    enabled: true,
+  });
+
+  const registry = JSON.parse(await fs.readFile(registryFile, "utf-8"));
+  assert.equal(registry.plugins["other@test"].installPath, "/tmp/other");
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].installPath, "/tmp/workbuddy-otel-plugin");
+});
+
 test("shell installer prefers the official plugin CLI when available", async () => {
   const profileDir = path.join(tempDir, "shell-cli-profile");
   const cliDir = path.join(tempDir, "fake-cli");
@@ -220,4 +303,33 @@ test("shell installer prefers the official plugin CLI when available", async () 
   const cliOutput = await fs.readFile(cliLog, "utf-8");
   assert.match(cliOutput, /plugin marketplace add/);
   assert.match(cliOutput, /plugin install workbuddy-otel-plugin@guance --scope user/);
+});
+
+test("shell installer fallback writes settings hooks and plugin registry when CLI is unavailable", async () => {
+  const profileDir = path.join(tempDir, "shell-fallback-profile");
+  await fs.mkdir(profileDir, { recursive: true });
+
+  const result = spawnSync("bash", [
+    "scripts/install.sh",
+    "--config-dir", profileDir,
+    "--type", "gtrace",
+    "--endpoint", "https://llm-openway.guance.com",
+  ], {
+    cwd: path.resolve("."),
+    env: {
+      ...process.env,
+      WORKBUDDY_OTEL_NODE: process.execPath,
+      PATH: `${tempDir}${path.delimiter}/usr/bin${path.delimiter}/bin`,
+    },
+    encoding: "utf-8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /plugin CLI not found; updated plugin registry and/);
+
+  const settings = JSON.parse(await fs.readFile(path.join(profileDir, "settings.json"), "utf-8"));
+  assert.equal(settings.enabledPlugins["workbuddy-otel-plugin@guance"], true);
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /plugins\/cache\/guance\/workbuddy-otel-plugin\/0\.1\.4/);
+
+  const registry = JSON.parse(await fs.readFile(path.join(profileDir, "plugins", "installed_plugins.json"), "utf-8"));
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.4");
 });

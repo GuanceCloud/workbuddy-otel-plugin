@@ -26,7 +26,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `
   "& '$installer' -Version latest -Endpoint https://llm-openway.guance.com -XToken '<client-token>' -Tag @('agent_id=workbuddy-prod','agent_name=WorkBuddy')"
 ```
 
-Restart WorkBuddy or run `/reload-plugins` after installation. The installers create a local `guance` marketplace, enable `workbuddy-otel-plugin@guance`, preserve unrelated WorkBuddy settings, and merge `gtrace.json`. Normal upgrades preserve endpoint, token, paths, runtime enablement, and privacy settings when those options are omitted.
+On macOS, quit WorkBuddy completely before running the installer. After installation, restart WorkBuddy or run `/reload-plugins`. The installers create a local `guance` marketplace, enable `workbuddy-otel-plugin@guance`, preserve unrelated WorkBuddy settings, add a direct Hook fallback when the official CLI is unavailable, and merge `gtrace.json`. Normal upgrades preserve endpoint, token, paths, runtime enablement, and privacy settings when those options are omitted.
 
 You can also install through WorkBuddy's local marketplace flow:
 

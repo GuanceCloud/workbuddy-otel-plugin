@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Add a no-CLI fallback that writes managed global hooks into `~/.workbuddy/settings.json` and records the plugin in `~/.workbuddy/plugins/installed_plugins.json`, so macOS installs still load telemetry when `workbuddy` / `codebuddy` is not available in `PATH`.
+- Abort install and uninstall on macOS while WorkBuddy is still running, preventing the desktop app from writing stale plugin state back over the installer's changes.
+- Add regression coverage for fallback hook installation, plugin registry updates, and settings cleanup.
+
 ## 0.1.3
 
 - Copy the installed plugin into WorkBuddy's versioned cache directory so Hook runtime files exist under `~/.workbuddy/plugins/cache/guance/workbuddy-otel-plugin/<version>`.

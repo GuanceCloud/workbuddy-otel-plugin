@@ -36,7 +36,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `
   "& '$installer' -Version latest -Endpoint https://llm-openway.guance.com -XToken '<client-token>' -Tag @('agent_id=workbuddy-prod','agent_name=WorkBuddy')"
 ```
 
-本地解压安装仍可运行 `bash scripts/install.sh ...` 或 `.\scripts\install.ps1 ...`。安装器会创建本地 `guance` marketplace、启用 `workbuddy-otel-plugin@guance`、合并现有设置，并创建或增量更新 `gtrace.json`。普通升级保留已有 endpoint、Token、路径、启停和隐私配置。安装后重启 WorkBuddy 或运行 `/reload-plugins`。
+本地解压安装仍可运行 `bash scripts/install.sh ...` 或 `.\scripts\install.ps1 ...`。macOS 上安装、升级或卸载前请先完全退出 WorkBuddy。安装器会创建本地 `guance` marketplace、启用 `workbuddy-otel-plugin@guance`、在官方 CLI 不可用时写入直接 Hook fallback、合并现有设置，并创建或增量更新 `gtrace.json`。普通升级保留已有 endpoint、Token、路径、启停和隐私配置。安装后重启 WorkBuddy 或运行 `/reload-plugins`。
 
 也可以在 WorkBuddy 中执行以下命令，把仓库内的 `marketplace/` 目录作为本地 marketplace 添加后安装插件：
 

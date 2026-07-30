@@ -14,6 +14,7 @@ The plugin has no runtime npm dependencies.
 Install the latest release without cloning the repository:
 
 ```bash
+# Quit WorkBuddy completely on macOS before running the installer.
 curl -fsSL https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/download/install-release.sh \
   | bash -s -- latest \
       --endpoint https://llm-openway.guance.com \
@@ -25,6 +26,7 @@ curl -fsSL https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/
 Install from a local checkout or extracted release:
 
 ```bash
+# Quit WorkBuddy completely on macOS before running the installer.
 bash scripts/install.sh \
   --endpoint https://llm-openway.guance.com \
   --x-token '<client-token>'
@@ -86,7 +88,7 @@ curl -fsSL https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/
   | bash -s -- latest
 ```
 
-Install a specific version by replacing `latest` with `v0.1.3` or `0.1.3`. PowerShell uses `-Version v0.1.3`.
+Install a specific version by replacing `latest` with `v0.1.4` or `0.1.4`. PowerShell uses `-Version v0.1.4`.
 
 ## Runtime switches
 

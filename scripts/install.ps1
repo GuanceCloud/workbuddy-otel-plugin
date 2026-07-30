@@ -109,10 +109,13 @@ $MarketplaceDir = Join-Path $ConfigDir "plugins\marketplaces\guance"
 $TargetDir = Join-Path $MarketplaceDir "plugins\workbuddy-otel-plugin"
 $CachePluginDir = Join-Path $ConfigDir "plugins\cache\guance\workbuddy-otel-plugin"
 $SettingsFile = Join-Path $ConfigDir "settings.json"
+$InstalledPluginsFile = Join-Path $ConfigDir "plugins\installed_plugins.json"
 $DataDir = Join-Path $ConfigDir "plugins\data\workbuddy-otel-plugin"
 $PluginSelector = "workbuddy-otel-plugin@guance"
 $ConfigHelper = Join-Path $RepoRoot "scripts\install-config.js"
 $HookSource = Join-Path $RepoRoot "src\workbuddy-hook.js"
+$PluginVersion = $null
+$CacheDir = $null
 if (-not (Test-Path -LiteralPath $ConfigHelper -PathType Leaf)) { throw "Cannot find $ConfigHelper" }
 
 $NodeBin = Resolve-Node $ConfigDir
@@ -130,6 +133,16 @@ function Update-PluginSetting([bool]$Enabled) {
   $action = if ($Enabled) { "enable-plugin" } else { "disable-plugin" }
   & $NodeBin $ConfigHelper $action
   if ($LASTEXITCODE -ne 0) { throw "Failed to update $SettingsFile" }
+}
+
+function Update-PluginFallback([string]$Action) {
+  $env:WORKBUDDY_SETTINGS_FILE_RUNTIME = $SettingsFile
+  $env:WORKBUDDY_INSTALLED_PLUGINS_FILE_RUNTIME = $InstalledPluginsFile
+  $env:WORKBUDDY_PLUGIN_SELECTOR_RUNTIME = $PluginSelector
+  $env:WORKBUDDY_PLUGIN_ROOT_RUNTIME = $CacheDir
+  $env:WORKBUDDY_PLUGIN_VERSION_RUNTIME = $PluginVersion
+  & $NodeBin $ConfigHelper $Action
+  if ($LASTEXITCODE -ne 0) { throw "Failed to update fallback plugin state" }
 }
 
 function Get-PluginVersion() {
@@ -155,10 +168,19 @@ function Activate-PluginWithCli([string]$Cli) {
   return ($LASTEXITCODE -eq 0)
 }
 
+function Test-WorkBuddyRunning() {
+  $isMac = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)
+  if (-not $isMac) { return $false }
+  @(Get-Process -Name "WorkBuddy", "CodeBuddy", "workbuddy", "codebuddy" -ErrorAction SilentlyContinue).Count -gt 0
+}
+
 if ($Uninstall) {
+  if (Test-WorkBuddyRunning) {
+    throw "WorkBuddy is running. Quit WorkBuddy completely before uninstalling, then retry. This prevents macOS from writing stale plugin settings back over the uninstall changes."
+  }
   Remove-PathIfPresent $TargetDir
   Remove-PathIfPresent $CachePluginDir
-  Update-PluginSetting $false
+  Update-PluginFallback "disable-plugin-fallback"
   if ($Purge) {
     Remove-PathIfPresent $DataDir
     Remove-PathIfPresent $ConfigFile
@@ -170,6 +192,9 @@ if ($Uninstall) {
 
 if (-not (Test-Path -LiteralPath $HookSource -PathType Leaf)) {
   throw "Cannot find WorkBuddy plugin runtime under $RepoRoot"
+}
+if (Test-WorkBuddyRunning) {
+  throw "WorkBuddy is running. Quit WorkBuddy completely before installing, then retry. This prevents macOS from writing stale plugin settings back over the installer changes."
 }
 [IO.Directory]::CreateDirectory((Join-Path $MarketplaceDir ".codebuddy-plugin")) | Out-Null
 Remove-PathIfPresent $TargetDir
@@ -195,14 +220,16 @@ if (Test-Path -LiteralPath $SettingsFile -PathType Leaf) {
 $PluginCli = Resolve-PluginCli
 if ($PluginCli) {
   if (Activate-PluginWithCli $PluginCli) {
+    Update-PluginSetting $true
+    Update-PluginFallback "remove-plugin-fallback-hooks"
     Write-InstallLog "activated plugin with CLI: $PluginCli"
   } else {
-    Update-PluginSetting $true
-    Write-InstallLog "CLI activation failed; updated $SettingsFile directly"
+    Update-PluginFallback "enable-plugin-fallback"
+    Write-InstallLog "CLI activation failed; updated plugin registry and $SettingsFile directly"
   }
 } else {
-  Update-PluginSetting $true
-  Write-InstallLog "plugin CLI not found; updated $SettingsFile directly"
+  Update-PluginFallback "enable-plugin-fallback"
+  Write-InstallLog "plugin CLI not found; updated plugin registry and $SettingsFile directly"
 }
 $verb = if ($Refresh) { "refreshed" } else { "installed" }
 Write-InstallLog "$verb plugin: $TargetDir"

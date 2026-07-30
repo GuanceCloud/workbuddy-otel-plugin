@@ -153,9 +153,12 @@ MARKETPLACE_DIR="$CONFIG_DIR/plugins/marketplaces/guance"
 TARGET_DIR="$MARKETPLACE_DIR/plugins/workbuddy-otel-plugin"
 CACHE_PLUGIN_DIR="$CONFIG_DIR/plugins/cache/guance/workbuddy-otel-plugin"
 SETTINGS_FILE="$CONFIG_DIR/settings.json"
+INSTALLED_PLUGINS_FILE="$CONFIG_DIR/plugins/installed_plugins.json"
 DATA_DIR="$CONFIG_DIR/plugins/data/workbuddy-otel-plugin"
 PLUGIN_SELECTOR="workbuddy-otel-plugin@guance"
 CONFIG_HELPER="$REPO_ROOT/scripts/install-config.js"
+PLUGIN_VERSION=""
+CACHE_DIR=""
 
 resolve_node() {
   local candidate=""
@@ -199,6 +202,16 @@ update_plugin_setting() {
     "$NODE_BIN" "$CONFIG_HELPER" "$action"
 }
 
+update_plugin_fallback() {
+  local action="$1"
+  WORKBUDDY_SETTINGS_FILE_RUNTIME="$SETTINGS_FILE" \
+  WORKBUDDY_INSTALLED_PLUGINS_FILE_RUNTIME="$INSTALLED_PLUGINS_FILE" \
+  WORKBUDDY_PLUGIN_SELECTOR_RUNTIME="$PLUGIN_SELECTOR" \
+  WORKBUDDY_PLUGIN_ROOT_RUNTIME="${CACHE_DIR:-}" \
+  WORKBUDDY_PLUGIN_VERSION_RUNTIME="${PLUGIN_VERSION:-}" \
+    "$NODE_BIN" "$CONFIG_HELPER" "$action"
+}
+
 plugin_version() {
   "$NODE_BIN" -p "require(process.argv[1]).version" "$REPO_ROOT/package.json"
 }
@@ -225,10 +238,21 @@ activate_plugin_with_cli() {
   "$cli" plugin enable "$PLUGIN_SELECTOR" >/dev/null 2>&1
 }
 
+workbuddy_running() {
+  [[ "$(uname -s)" == "Darwin" ]] || return 1
+  command -v pgrep >/dev/null 2>&1 || return 1
+  pgrep -f '/(WorkBuddy|CodeBuddy)\.app/Contents/MacOS/|(^|/)(WorkBuddy|CodeBuddy|workbuddy|codebuddy)([[:space:]]|$)' >/dev/null 2>&1
+}
+
 if [[ "$UNINSTALL" == true ]]; then
+  if workbuddy_running; then
+    echo "WorkBuddy is running. Quit WorkBuddy completely before uninstalling, then retry." >&2
+    echo "This prevents macOS from writing stale plugin settings back over the uninstall changes." >&2
+    exit 1
+  fi
   rm -rf "$TARGET_DIR"
   rm -rf "$CACHE_PLUGIN_DIR"
-  update_plugin_setting disable-plugin
+  update_plugin_fallback disable-plugin-fallback
   if [[ "$PURGE" == true ]]; then
     rm -rf "$DATA_DIR"
     rm -f "$CONFIG_FILE"
@@ -239,6 +263,11 @@ if [[ "$UNINSTALL" == true ]]; then
 fi
 
 [[ -f "$REPO_ROOT/src/workbuddy-hook.js" ]] || { echo "Cannot find WorkBuddy plugin runtime under $REPO_ROOT" >&2; exit 1; }
+if workbuddy_running; then
+  echo "WorkBuddy is running. Quit WorkBuddy completely before installing, then retry." >&2
+  echo "This prevents macOS from writing stale plugin settings back over the installer changes." >&2
+  exit 1
+fi
 mkdir -p "$MARKETPLACE_DIR/.codebuddy-plugin" "$TARGET_DIR" "$CONFIG_DIR"
 rm -rf "$TARGET_DIR"
 mkdir -p "$TARGET_DIR"
@@ -265,14 +294,16 @@ fi
 PLUGIN_CLI=""
 if PLUGIN_CLI="$(resolve_plugin_cli)"; then
   if activate_plugin_with_cli "$PLUGIN_CLI"; then
+    update_plugin_setting enable-plugin
+    update_plugin_fallback remove-plugin-fallback-hooks
     log "activated plugin with CLI: $PLUGIN_CLI"
   else
-    update_plugin_setting enable-plugin
-    log "CLI activation failed; updated $SETTINGS_FILE directly"
+    update_plugin_fallback enable-plugin-fallback
+    log "CLI activation failed; updated plugin registry and $SETTINGS_FILE directly"
   fi
 else
-  update_plugin_setting enable-plugin
-  log "plugin CLI not found; updated $SETTINGS_FILE directly"
+  update_plugin_fallback enable-plugin-fallback
+  log "plugin CLI not found; updated plugin registry and $SETTINGS_FILE directly"
 fi
 log "$([[ "$REFRESH" == true ]] && printf 'refreshed' || printf 'installed') plugin: $TARGET_DIR"
 log "updated plugin cache: $CACHE_DIR"
