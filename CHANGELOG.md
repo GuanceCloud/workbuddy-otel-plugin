@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Fix the installer helper entrypoint check in `scripts/install-config.js` by comparing real paths instead of raw URL strings, so macOS temporary paths such as `/var/...` and `/private/var/...` no longer cause silent no-op installs.
+- Add regression coverage for invoking the installer helper through a symlinked path, matching the remote installer extraction flow on macOS.
+
 ## 0.1.4
 
 - Add a no-CLI fallback that writes managed global hooks into `~/.workbuddy/settings.json` and records the plugin in `~/.workbuddy/plugins/installed_plugins.json`, so macOS installs still load telemetry when `workbuddy` / `codebuddy` is not available in `PATH`.

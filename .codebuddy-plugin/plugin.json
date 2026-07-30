@@ -1,6 +1,6 @@
 {
   "name": "workbuddy-otel-plugin",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Export WorkBuddy agent traces and metrics using the Guance gtrace conventions.",
   "author": {
     "name": "GuanceCloud"

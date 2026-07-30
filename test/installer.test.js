@@ -105,6 +105,33 @@ test("installer helper CLI overwrites managed auth and agent tags with the lates
   assert.equal(config.resourceAttributes.agent_name, "newname");
 });
 
+test("installer helper CLI still runs when invoked through a symlinked path", async () => {
+  const configFile = path.join(tempDir, "symlink-cli.json");
+  const symlinkScript = path.join(tempDir, "install-config-symlink.js");
+  try { await fs.unlink(symlinkScript); } catch {}
+  await fs.symlink(path.resolve("scripts/install-config.js"), symlinkScript);
+
+  const result = spawnSync(process.execPath, [
+    symlinkScript,
+    "write-gtrace-config",
+    "--config-file", configFile,
+    "--endpoint", "https://llm-openway.guance.com",
+    "--trace-path", "v1/write/otel-llm",
+    "--metrics-path", "v1/write/otel-metrics",
+    "--install-type", "gtrace",
+    "--x-token", "symlink-token",
+  ], {
+    cwd: path.resolve("."),
+    encoding: "utf-8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  const config = JSON.parse(await fs.readFile(configFile, "utf-8"));
+  assert.equal(config.endpoint, "https://llm-openway.guance.com");
+  assert.equal(config.headers["X-Token"], "symlink-token");
+  assert.equal(config.tracePath, "v1/write/otel-llm");
+});
+
 test("does not apply the default GTrace preset to an existing OTLP config", async () => {
   const configFile = path.join(tempDir, "otlp-upgrade.json");
   await fs.writeFile(configFile, JSON.stringify({
@@ -142,7 +169,7 @@ test("shell installer reapplies the explicit gtrace preset to an existing config
   assert.equal(config.metricsPath, "v1/write/otel-metrics");
   assert.equal(config.headers["To-Headless"], "true");
   assert.equal(config.headers.Authorization, "Bearer keep-me");
-  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.4", "hooks", "hooks.json"));
+  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.5", "hooks", "hooks.json"));
 });
 
 test("shell installer overwrites existing agent tags with the latest tag arguments", async () => {
@@ -196,7 +223,7 @@ test("updates only the WorkBuddy plugin selector in settings", async () => {
 test("fallback installation writes managed hooks and plugin registry entries", async () => {
   const settingsFile = path.join(tempDir, "fallback-settings.json");
   const registryFile = path.join(tempDir, "plugins", "installed_plugins.json");
-  const pluginRoot = path.join(tempDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.4");
+  const pluginRoot = path.join(tempDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.5");
   await fs.mkdir(pluginRoot, { recursive: true });
   await fs.writeFile(settingsFile, JSON.stringify({
     theme: "dark",
@@ -212,7 +239,7 @@ test("fallback installation writes managed hooks and plugin registry entries", a
     registryFile,
     pluginSelector: "workbuddy-otel-plugin@guance",
     pluginRoot,
-    version: "0.1.4",
+    version: "0.1.5",
     enabled: true,
   });
 
@@ -225,14 +252,14 @@ test("fallback installation writes managed hooks and plugin registry entries", a
 
   const registry = JSON.parse(await fs.readFile(registryFile, "utf-8"));
   assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].installPath, pluginRoot);
-  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.4");
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.5");
 
   updateWorkBuddyFallbackInstall({
     settingsFile,
     registryFile,
     pluginSelector: "workbuddy-otel-plugin@guance",
     pluginRoot,
-    version: "0.1.4",
+    version: "0.1.5",
     enabled: false,
   });
 
@@ -262,7 +289,7 @@ test("updates installed plugin registry without disturbing unrelated entries", a
     registryFile,
     pluginSelector: "workbuddy-otel-plugin@guance",
     installPath: "/tmp/workbuddy-otel-plugin",
-    version: "0.1.4",
+    version: "0.1.5",
     enabled: true,
   });
 
@@ -328,8 +355,8 @@ test("shell installer fallback writes settings hooks and plugin registry when CL
 
   const settings = JSON.parse(await fs.readFile(path.join(profileDir, "settings.json"), "utf-8"));
   assert.equal(settings.enabledPlugins["workbuddy-otel-plugin@guance"], true);
-  assert.match(settings.hooks.Stop[0].hooks[0].command, /plugins\/cache\/guance\/workbuddy-otel-plugin\/0\.1\.4/);
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /plugins\/cache\/guance\/workbuddy-otel-plugin\/0\.1\.5/);
 
   const registry = JSON.parse(await fs.readFile(path.join(profileDir, "plugins", "installed_plugins.json"), "utf-8"));
-  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.4");
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.5");
 });
