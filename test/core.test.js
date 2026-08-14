@@ -119,6 +119,48 @@ test("parses WorkBuddy 5.2.6 messages, tools, models, and per-call usage", async
   assert.equal(turn.tools[0].id, "call-1");
   assert.equal(turn.tools[0].timingSource, "hook");
   assert.equal(turn.tools[0].endMs - turn.tools[0].startMs, 500);
+  assert.deepEqual(turn.llmCalls[0].inputMessages, [
+    { role: "user", parts: [{ type: "text", content: "Use the demo skill to inspect this project." }] },
+  ]);
+  assert.deepEqual(turn.llmCalls[1].inputMessages, [
+    { role: "user", parts: [{ type: "text", content: "Use the demo skill to inspect this project." }] },
+    { role: "assistant", parts: [{ type: "tool_call", id: "call-1", name: "Skill", arguments: { skill: "demo", api_token: "sk-example-not-real-123456789" } }] },
+    { role: "tool", tool_call_id: "call-1", parts: [{ type: "tool_call_response", content: { result: "demo completed" } }] },
+  ]);
+});
+
+test("reuses prior conversation context for consecutive llm outputs in the same turn", () => {
+  const items = [
+    { id: "u-seq", type: "message", role: "user", timestamp: 1784003000000, content: [{ type: "input_text", text: "Plan and then call a tool" }] },
+    {
+      id: "a-seq-1",
+      type: "message",
+      role: "assistant",
+      timestamp: 1784003000500,
+      content: [{ type: "output_text", text: "I will inspect the repository first." }],
+      providerData: { model: "glm-5.2", usage: { input_tokens: 100, output_tokens: 20 } },
+    },
+    {
+      id: "fc-seq",
+      type: "function_call",
+      callId: "call-seq",
+      name: "Bash",
+      arguments: "{\"command\":\"pwd\"}",
+      timestamp: 1784003000900,
+      providerData: { model: "glm-5.2", usage: { input_tokens: 120, output_tokens: 5 } },
+    },
+  ];
+
+  const [turn] = parseTurns(items, hookInput("Stop", { session_id: "sequence-session" }));
+  assert.equal(turn.llmCalls.length, 2);
+  assert.deepEqual(turn.llmCalls[0].inputMessages, [
+    { role: "user", parts: [{ type: "text", content: "Plan and then call a tool" }] },
+  ]);
+  assert.deepEqual(turn.llmCalls[1].inputMessages, [
+    { role: "user", parts: [{ type: "text", content: "Plan and then call a tool" }] },
+    { role: "assistant", parts: [{ type: "text", content: "I will inspect the repository first." }] },
+  ]);
+  assert.equal(turn.llmCalls[1].outputKind, "tool_call");
 });
 
 test("builds the gtrace hierarchy, redacts content, and derives four metric families", async () => {
@@ -138,6 +180,13 @@ test("builds the gtrace hierarchy, redacts content, and derives four metric fami
   assert.equal(llms[0].parent_id, root.span_id);
   assert.equal(assistants[0].parent_id, root.span_id);
   assert.equal(llms[0].attributes["timing.source"], "inferred");
+  assert.equal(llms[0].attributes.input_preview, "Use the demo skill to inspect this project.");
+  assert.equal(llms[0].attributes.output_preview, "Skill {\"skill\":\"demo\",\"api_token\":\"<redacted>\"}");
+  assert.match(llms[1].attributes.input_preview, /Use the demo skill to inspect this project\./);
+  assert.match(llms[1].attributes.input_preview, /demo completed/);
+  assert.doesNotMatch(llms[1].attributes.input_preview, /sk-example-not-real-123456789/);
+  assert.equal(llms[1].attributes.output_preview, "The demo skill completed successfully.");
+  assert.equal(assistants[0].attributes.output_preview, "Skill {\"skill\":\"demo\",\"api_token\":\"<redacted>\"}");
   assert.equal(tool.attributes["gen_ai.tool.call.arguments"].api_token, "<redacted>");
   assert.equal(skill.attributes["gen_ai.skill.version"], "1.2.3");
   assert.equal(root.resource.agent_runtime, "workbuddy");

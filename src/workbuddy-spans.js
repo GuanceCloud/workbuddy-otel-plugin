@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { randomSpanId, randomTraceId, redactAndClip, toNs, toText, truncate } from "./workbuddy-utils.js";
 
-export const PLUGIN_VERSION = "0.1.5";
+export const PLUGIN_VERSION = "0.1.6";
 
 function nsString(value) {
   return value.toString();
@@ -60,13 +60,57 @@ function conversation(turn) {
   };
 }
 
+function normalizePreview(text) {
+  const normalized = String(text || "").trim().replace(/\s+/g, " ");
+  return normalized || undefined;
+}
+
+function messagePreview(value) {
+  if (value == null) return undefined;
+  if (typeof value === "string") return normalizePreview(value);
+  if (["number", "boolean", "bigint"].includes(typeof value)) return String(value);
+  if (Array.isArray(value)) {
+    const parts = value.map((entry) => messagePreview(entry)).filter(Boolean);
+    return normalizePreview(parts.join("\n"));
+  }
+  if (value && typeof value === "object") {
+    if (Array.isArray(value.parts)) {
+      const parts = value.parts.map((part) => messagePreview(part)).filter(Boolean);
+      return normalizePreview(parts.join("\n"));
+    }
+    switch (value.type) {
+      case "text":
+      case "input_text":
+      case "output_text":
+        return messagePreview(value.content ?? value.text);
+      case "reasoning":
+      case "thinking":
+        return messagePreview(value.content ?? value.text ?? value.thinking);
+      case "tool_call":
+        return normalizePreview([
+          typeof value.name === "string" ? value.name : undefined,
+          value.arguments != null ? toText(value.arguments) : undefined,
+        ].filter(Boolean).join(" "));
+      case "tool_call_response":
+        return messagePreview(value.content);
+      default: {
+        const parts = Object.values(value).map((entry) => messagePreview(entry)).filter(Boolean);
+        if (parts.length > 0) return normalizePreview(parts.join("\n"));
+      }
+    }
+  }
+  return normalizePreview(toText(value));
+}
+
 function previews(input, output, config) {
-  const inputText = toText(input);
-  const outputText = toText(output);
+  const inputText = messagePreview(input) ?? "";
+  const outputText = messagePreview(output) ?? "";
+  const inputPreview = config.capture_content ? messagePreview(redactAndClip(input, config.max_chars)) : undefined;
+  const outputPreview = config.capture_content ? messagePreview(redactAndClip(output, config.max_chars)) : undefined;
   return {
-    input_preview: config.capture_content ? truncate(inputText, config.max_chars) : undefined,
+    input_preview: inputPreview ? truncate(inputPreview, config.max_chars) : undefined,
     input_length: inputText.length,
-    output_preview: config.capture_content ? truncate(outputText, config.max_chars) : undefined,
+    output_preview: outputPreview ? truncate(outputPreview, config.max_chars) : undefined,
     output_length: outputText.length,
   };
 }

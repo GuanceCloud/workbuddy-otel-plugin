@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- Rebuild WorkBuddy `llm` span inputs from rolling conversation context so consecutive assistant and tool-call generations no longer lose `gen_ai.input.messages`.
+- Generate `input_preview` and `output_preview` from readable message content, aligned with `codex-otel-plugin`, and apply preview redaction so tool-call arguments and tool responses do not leak raw secrets.
+
 ## 0.1.5
 
 - Fix the installer helper entrypoint check in `scripts/install-config.js` by comparing real paths instead of raw URL strings, so macOS temporary paths such as `/var/...` and `/private/var/...` no longer cause silent no-op installs.

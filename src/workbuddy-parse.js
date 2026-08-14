@@ -199,15 +199,17 @@ function outputMessage(item) {
 function collectLlmCalls(items, prompt) {
   const out = [];
   let boundaryMs = itemTime(items[0], Date.now());
-  let pendingInput = [{ role: "user", parts: [{ type: "text", content: prompt }] }];
+  const conversation = prompt
+    ? [{ role: "user", parts: [{ type: "text", content: prompt }] }]
+    : [];
   for (const item of items.slice(1)) {
     if (["function_call_result", "function_call_output"].includes(item?.type)) {
       boundaryMs = itemTime(item, boundaryMs);
-      pendingInput = [{
+      conversation.push({
         role: "tool",
         tool_call_id: item.callId ?? item.call_id ?? item.id,
         parts: [{ type: "tool_call_response", content: toolResult(item) }],
-      }];
+      });
       continue;
     }
     const isModelOutput = (item?.type === "message" && item?.role === "assistant") || item?.type === "function_call";
@@ -225,13 +227,15 @@ function collectLlmCalls(items, prompt) {
       model,
       provider: providerOf(item),
       usage,
-      inputMessages: pendingInput,
+      inputMessages: conversation.slice(),
       outputMessages: [outputMessage(item)],
       outputKind: item.type === "function_call" ? "tool_call" : "text",
       finishReason: item.type === "function_call" ? "tool_call" : "stop",
     });
     boundaryMs = endMs;
-    pendingInput = [];
+    if (item.type === "function_call" || out.at(-1)?.outputMessages[0]?.parts?.length) {
+      conversation.push(out.at(-1).outputMessages[0]);
+    }
   }
   return out;
 }
