@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7
+
+- Merge consecutive assistant text and tool-call outputs from the same model response into a single WorkBuddy `llm` span, so short duplicate millisecond `llm` spans are no longer emitted.
+- Generate `assistant` spans only for real assistant text messages, removing duplicated `tool_call` output bodies between `llm` and `assistant` spans.
+
 ## 0.1.6
 
 - Rebuild WorkBuddy `llm` span inputs from rolling conversation context so consecutive assistant and tool-call generations no longer lose `gen_ai.input.messages`.

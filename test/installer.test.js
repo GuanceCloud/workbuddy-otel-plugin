@@ -169,7 +169,7 @@ test("shell installer reapplies the explicit gtrace preset to an existing config
   assert.equal(config.metricsPath, "v1/write/otel-metrics");
   assert.equal(config.headers["To-Headless"], "true");
   assert.equal(config.headers.Authorization, "Bearer keep-me");
-  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.6", "hooks", "hooks.json"));
+  await fs.access(path.join(profileDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.7", "hooks", "hooks.json"));
 });
 
 test("shell installer overwrites existing agent tags with the latest tag arguments", async () => {
@@ -223,7 +223,7 @@ test("updates only the WorkBuddy plugin selector in settings", async () => {
 test("fallback installation writes managed hooks and plugin registry entries", async () => {
   const settingsFile = path.join(tempDir, "fallback-settings.json");
   const registryFile = path.join(tempDir, "plugins", "installed_plugins.json");
-  const pluginRoot = path.join(tempDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.6");
+  const pluginRoot = path.join(tempDir, "plugins", "cache", "guance", "workbuddy-otel-plugin", "0.1.7");
   await fs.mkdir(pluginRoot, { recursive: true });
   await fs.writeFile(settingsFile, JSON.stringify({
     theme: "dark",
@@ -239,7 +239,7 @@ test("fallback installation writes managed hooks and plugin registry entries", a
     registryFile,
     pluginSelector: "workbuddy-otel-plugin@guance",
     pluginRoot,
-    version: "0.1.6",
+    version: "0.1.7",
     enabled: true,
   });
 
@@ -252,14 +252,14 @@ test("fallback installation writes managed hooks and plugin registry entries", a
 
   const registry = JSON.parse(await fs.readFile(registryFile, "utf-8"));
   assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].installPath, pluginRoot);
-  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.6");
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.7");
 
   updateWorkBuddyFallbackInstall({
     settingsFile,
     registryFile,
     pluginSelector: "workbuddy-otel-plugin@guance",
     pluginRoot,
-    version: "0.1.6",
+    version: "0.1.7",
     enabled: false,
   });
 
@@ -289,7 +289,7 @@ test("updates installed plugin registry without disturbing unrelated entries", a
     registryFile,
     pluginSelector: "workbuddy-otel-plugin@guance",
     installPath: "/tmp/workbuddy-otel-plugin",
-    version: "0.1.6",
+    version: "0.1.7",
     enabled: true,
   });
 
@@ -355,8 +355,8 @@ test("shell installer fallback writes settings hooks and plugin registry when CL
 
   const settings = JSON.parse(await fs.readFile(path.join(profileDir, "settings.json"), "utf-8"));
   assert.equal(settings.enabledPlugins["workbuddy-otel-plugin@guance"], true);
-  assert.match(settings.hooks.Stop[0].hooks[0].command, /plugins\/cache\/guance\/workbuddy-otel-plugin\/0\.1\.6/);
+  assert.match(settings.hooks.Stop[0].hooks[0].command, /plugins\/cache\/guance\/workbuddy-otel-plugin\/0\.1\.7/);
 
   const registry = JSON.parse(await fs.readFile(path.join(profileDir, "plugins", "installed_plugins.json"), "utf-8"));
-  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.6");
+  assert.equal(registry.plugins["workbuddy-otel-plugin@guance"].version, "0.1.7");
 });

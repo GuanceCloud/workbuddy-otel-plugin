@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { randomSpanId, randomTraceId, redactAndClip, toNs, toText, truncate } from "./workbuddy-utils.js";
 
-export const PLUGIN_VERSION = "0.1.6";
+export const PLUGIN_VERSION = "0.1.7";
 
 function nsString(value) {
   return value.toString();
@@ -297,26 +297,28 @@ export async function buildWorkBuddySpans(config, hookInput, turn) {
       },
     }));
 
-    spans.push(span({
-      traceId,
-      spanId: randomSpanId(),
-      parentId: rootId,
-      name: "assistant",
-      startMs: call.endMs,
-      endMs: call.endMs + 1,
-      attributes: {
-        "span.kind": "internal",
-        ...commonAttrs(turn),
-        status: "ok",
-        "gen_ai.request.model": call.model,
-        "gen_ai.response.model": call.model,
-        "gen_ai.provider.name": call.provider,
-        "gen_ai.output.messages": captured(call.outputMessages, config),
-        "gen_ai.output.type": call.outputKind,
-        output_kind: call.outputKind,
-        ...previews(undefined, call.outputMessages, config),
-      },
-    }));
+    for (const assistant of call.assistantMessages ?? []) {
+      spans.push(span({
+        traceId,
+        spanId: randomSpanId(),
+        parentId: rootId,
+        name: "assistant",
+        startMs: assistant.startMs,
+        endMs: assistant.endMs + 1,
+        attributes: {
+          "span.kind": "internal",
+          ...commonAttrs(turn),
+          status: "ok",
+          "gen_ai.request.model": call.model,
+          "gen_ai.response.model": call.model,
+          "gen_ai.provider.name": call.provider,
+          "gen_ai.output.messages": captured(assistant.outputMessages, config),
+          "gen_ai.output.type": "text",
+          output_kind: "text",
+          ...previews(undefined, assistant.outputMessages, config),
+        },
+      }));
+    }
   }
 
   for (const tool of turn.tools) {

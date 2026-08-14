@@ -196,14 +196,66 @@ function outputMessage(item) {
   return { role: "assistant", parts };
 }
 
+function hasUsage(usage) {
+  return Object.values(usage ?? {}).some((value) => value !== undefined);
+}
+
+function messageEvent(item, fallback) {
+  const message = outputMessage(item);
+  return {
+    item,
+    message,
+    startMs: itemTime(item, fallback),
+    endMs: itemTime(item, fallback),
+  };
+}
+
+function finalizeLlmBatch(batch, out) {
+  if (!batch || batch.events.length === 0) return;
+  const outputs = [];
+  const assistantMessages = [];
+  for (const event of batch.events) {
+    if (event.message.parts.length === 0) continue;
+    outputs.push(...event.message.parts);
+    if (event.item?.type === "message" && event.item?.role === "assistant") {
+      assistantMessages.push({
+        startMs: event.startMs,
+        endMs: event.endMs,
+        outputMessages: [event.message],
+      });
+    }
+  }
+  if (outputs.length === 0) return;
+  const last = batch.events.at(-1);
+  out.push({
+    item: last.item,
+    id: last.item?.id,
+    startMs: batch.startMs,
+    endMs: last.endMs,
+    timingSource: "inferred",
+    model: batch.model,
+    provider: batch.provider,
+    usage: batch.usage,
+    inputMessages: batch.inputMessages,
+    outputMessages: [{ role: "assistant", parts: outputs }],
+    assistantMessages,
+    outputKind: batch.hasToolCall ? "tool_call" : "text",
+    finishReason: batch.hasToolCall ? "tool_call" : "stop",
+  });
+}
+
 function collectLlmCalls(items, prompt) {
   const out = [];
   let boundaryMs = itemTime(items[0], Date.now());
   const conversation = prompt
     ? [{ role: "user", parts: [{ type: "text", content: prompt }] }]
     : [];
+  let batch = undefined;
   for (const item of items.slice(1)) {
     if (["function_call_result", "function_call_output"].includes(item?.type)) {
+      finalizeLlmBatch(batch, out);
+      if (batch && out.at(-1)?.outputMessages?.length) conversation.push(...out.at(-1).outputMessages);
+      batch = undefined;
       boundaryMs = itemTime(item, boundaryMs);
       conversation.push({
         role: "tool",
@@ -216,27 +268,27 @@ function collectLlmCalls(items, prompt) {
     if (!isModelOutput) continue;
     const usage = usageOf(item);
     const model = modelOf(item);
-    if (!model && !Object.values(usage).some((value) => value !== undefined) && item.type === "message" && !messageText(item)) continue;
-    const endMs = itemTime(item, boundaryMs);
-    out.push({
-      item,
-      id: item.id,
-      startMs: boundaryMs,
-      endMs,
-      timingSource: "inferred",
-      model,
-      provider: providerOf(item),
-      usage,
-      inputMessages: conversation.slice(),
-      outputMessages: [outputMessage(item)],
-      outputKind: item.type === "function_call" ? "tool_call" : "text",
-      finishReason: item.type === "function_call" ? "tool_call" : "stop",
-    });
-    boundaryMs = endMs;
-    if (item.type === "function_call" || out.at(-1)?.outputMessages[0]?.parts?.length) {
-      conversation.push(out.at(-1).outputMessages[0]);
+    const event = messageEvent(item, boundaryMs);
+    if (!model && !hasUsage(usage) && item.type === "message" && event.message.parts.length === 0) continue;
+    if (!batch) {
+      batch = {
+        startMs: boundaryMs,
+        inputMessages: conversation.slice(),
+        model,
+        provider: providerOf(item),
+        usage,
+        hasToolCall: item.type === "function_call",
+        events: [event],
+      };
+      continue;
     }
+    batch.events.push(event);
+    if (model) batch.model = model;
+    if (providerOf(item)) batch.provider = providerOf(item);
+    if (hasUsage(usage)) batch.usage = usage;
+    if (item.type === "function_call") batch.hasToolCall = true;
   }
+  finalizeLlmBatch(batch, out);
   return out;
 }
 

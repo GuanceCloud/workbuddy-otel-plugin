@@ -129,7 +129,7 @@ test("parses WorkBuddy 5.2.6 messages, tools, models, and per-call usage", async
   ]);
 });
 
-test("reuses prior conversation context for consecutive llm outputs in the same turn", () => {
+test("groups consecutive assistant text and tool_call outputs into one llm call", () => {
   const items = [
     { id: "u-seq", type: "message", role: "user", timestamp: 1784003000000, content: [{ type: "input_text", text: "Plan and then call a tool" }] },
     {
@@ -152,15 +152,21 @@ test("reuses prior conversation context for consecutive llm outputs in the same 
   ];
 
   const [turn] = parseTurns(items, hookInput("Stop", { session_id: "sequence-session" }));
-  assert.equal(turn.llmCalls.length, 2);
+  assert.equal(turn.llmCalls.length, 1);
   assert.deepEqual(turn.llmCalls[0].inputMessages, [
     { role: "user", parts: [{ type: "text", content: "Plan and then call a tool" }] },
   ]);
-  assert.deepEqual(turn.llmCalls[1].inputMessages, [
-    { role: "user", parts: [{ type: "text", content: "Plan and then call a tool" }] },
+  assert.deepEqual(turn.llmCalls[0].outputMessages, [{
+    role: "assistant",
+    parts: [
+      { type: "text", content: "I will inspect the repository first." },
+      { type: "tool_call", id: "call-seq", name: "Bash", arguments: { command: "pwd" } },
+    ],
+  }]);
+  assert.deepEqual(turn.llmCalls[0].assistantMessages.map((message) => message.outputMessages[0]), [
     { role: "assistant", parts: [{ type: "text", content: "I will inspect the repository first." }] },
   ]);
-  assert.equal(turn.llmCalls[1].outputKind, "tool_call");
+  assert.equal(turn.llmCalls[0].outputKind, "tool_call");
 });
 
 test("builds the gtrace hierarchy, redacts content, and derives four metric families", async () => {
@@ -174,7 +180,7 @@ test("builds the gtrace hierarchy, redacts content, and derives four metric fami
   const skill = spans.find((span) => span.name === "skill:demo");
   assert.ok(root);
   assert.equal(llms.length, 2);
-  assert.equal(assistants.length, 2);
+  assert.equal(assistants.length, 1);
   assert.equal(tool.parent_id, root.span_id);
   assert.equal(skill.parent_id, tool.span_id);
   assert.equal(llms[0].parent_id, root.span_id);
@@ -186,7 +192,7 @@ test("builds the gtrace hierarchy, redacts content, and derives four metric fami
   assert.match(llms[1].attributes.input_preview, /demo completed/);
   assert.doesNotMatch(llms[1].attributes.input_preview, /sk-example-not-real-123456789/);
   assert.equal(llms[1].attributes.output_preview, "The demo skill completed successfully.");
-  assert.equal(assistants[0].attributes.output_preview, "Skill {\"skill\":\"demo\",\"api_token\":\"<redacted>\"}");
+  assert.equal(assistants[0].attributes.output_preview, "The demo skill completed successfully.");
   assert.equal(tool.attributes["gen_ai.tool.call.arguments"].api_token, "<redacted>");
   assert.equal(skill.attributes["gen_ai.skill.version"], "1.2.3");
   assert.equal(root.resource.agent_runtime, "workbuddy");
