@@ -340,6 +340,56 @@ test("uploads protobuf traces and metrics once across duplicate Stop hooks", asy
   }
 });
 
+test("deduplicates terminal exports across plugin instances with different runtime data env", async () => {
+  const requests = [];
+  const server = http.createServer(async (request, response) => {
+    for await (const _chunk of request) { /* consume body */ }
+    requests.push(request.url);
+    response.writeHead(200);
+    response.end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const configDir = path.join(tempDir, "shared-config");
+  const baseEnv = {
+    ...process.env,
+    WORKBUDDY_CONFIG_DIR: configDir,
+    OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${address.port}`,
+  };
+  try {
+    const firstConfig = resolveConfig({
+      env: {
+        ...baseEnv,
+        CODEBUDDY_PLUGIN_DATA: path.join(tempDir, "runtime-a"),
+      },
+    });
+    const secondConfig = resolveConfig({
+      env: {
+        ...baseEnv,
+        CODEBUDDY_PLUGIN_DATA: path.join(tempDir, "runtime-b"),
+      },
+    });
+    assert.equal(firstConfig.dataDir, secondConfig.dataDir);
+    assert.equal(firstConfig.dataDir, path.join(configDir, "plugins", "data", "workbuddy-otel-plugin"));
+
+    const first = await runHook({
+      config: firstConfig,
+      hookInput: hookInput("Stop", { session_id: "shared-runtime-session" }),
+    });
+    const duplicate = await runHook({
+      config: secondConfig,
+      hookInput: hookInput("Stop", { session_id: "shared-runtime-session" }),
+    });
+
+    assert.equal(first.results[0].spans > 0, true);
+    assert.equal(duplicate.results[0].skipped, true);
+    assert.equal(requests.filter((url) => url === "/v1/traces").length, 1);
+    assert.equal(requests.filter((url) => url === "/v1/metrics").length, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("resumes a partial export without uploading traces twice", async () => {
   let metricAttempts = 0;
   const requests = [];

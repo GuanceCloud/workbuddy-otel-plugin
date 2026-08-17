@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+- Store WorkBuddy export journals, claims, and completion markers in the shared profile data directory so duplicate plugin instances still coordinate through the same dedup state.
+- Stop using runtime-scoped `CODEBUDDY_PLUGIN_DATA` / `CLAUDE_PLUGIN_DATA` paths for WorkBuddy upload state, which previously allowed the same terminal turn to be exported twice with different trace IDs.
+- Add regression coverage for duplicate terminal exports across plugin instances with different runtime data environment values.
+
 ## 0.1.7
 
 - Merge consecutive assistant text and tool-call outputs from the same model response into a single WorkBuddy `llm` span, so short duplicate millisecond `llm` spans are no longer emitted.

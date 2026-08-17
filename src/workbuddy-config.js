@@ -39,8 +39,8 @@ export function workBuddyConfigDir(env = process.env) {
 }
 
 export function pluginDataDir(env = process.env) {
-  return env.CODEBUDDY_PLUGIN_DATA?.trim()
-    || env.CLAUDE_PLUGIN_DATA?.trim()
+  return env.WORKBUDDY_OTEL_DATA_DIR?.trim()
+    || env.GTRACE_DATA_DIR?.trim()
     || path.join(workBuddyConfigDir(env), "plugins", "data", "workbuddy-otel-plugin");
 }
 

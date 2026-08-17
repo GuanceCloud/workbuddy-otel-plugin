@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import { randomSpanId, randomTraceId, redactAndClip, toNs, toText, truncate } from "./workbuddy-utils.js";
 
-export const PLUGIN_VERSION = "0.1.7";
+export const PLUGIN_VERSION = "0.1.8";
 
 function nsString(value) {
   return value.toString();

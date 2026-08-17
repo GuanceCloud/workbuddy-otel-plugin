@@ -1,6 +1,6 @@
 {
   "name": "workbuddy-otel-plugin",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "GTrace-compatible OpenTelemetry traces and metrics for WorkBuddy.",
   "type": "module",
   "private": true,
